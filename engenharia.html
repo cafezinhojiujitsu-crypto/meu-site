@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador CLP Integrado com controle de caldeira</title>
+    
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #1e1e1e; 
+            color: #d4d4d4;
+            padding: 20px;
+        }
+
+        h1 { margin-bottom: 30px; color: #569cd6; }
+
+        /* --- INTERFACE ESTRUTURAL --- */
+        #clp-interface {
+            background-color: #252526;
+            border: 3px solid #608b4e; 
+            padding: 20px;
+            width: 1400px; 
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        #ladder {
+            /* Colunas refinadas e altura de linha (rung) AUMENTADA para mais espaço vertical */
+            grid-template-columns: 20px repeat(11, 110px) 20px; 
+            grid-auto-rows: 85px; /* <<<< CORREÇÃO PRINCIPAL: AUMENTADO DE 60px PARA 85px */
+            gap: 0;
+            border-top: 2px solid #608b4e;
+            border-bottom: 2px solid #608b4e;
+            display: grid;
+        }
+        
+        .divider {
+            grid-column: 1 / 14;
+            height: 5px;
+            background-color: #555;
+            margin: 15px 0;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #d4d4d4;
+        }
+
+        /* --- ESTILOS LADDER --- */
+        .barramento { background-color: #d4d4d4; width: 2px; height: 100%; margin: auto; grid-column: 1 / 2; }
+        .barramento.right { grid-column: 13 / 14; }
+        .rung-container { 
+            grid-column: 2 / 13;
+            display: grid; 
+            grid-template-columns: subgrid; 
+            align-items: center; 
+        }
+        .contato-base, .bobina-base, .timer-base { 
+            display: flex; justify-content: center; align-items: center; height: 35px; font-size: 14px; font-weight: bold; color: #d4d4d4; 
+            border-radius: 3px; margin: 0 5px; transition: background-color 0.1s, color 0.1s; box-sizing: border-box;
+            background-color: #343434;
+        }
+        .na { border: 2px solid #569cd6; cursor: pointer; }
+        .nf { border: 2px solid #ce9178; cursor: pointer; }
+        .bobina { border: 2px solid #608b4e; padding: 5px 10px; }
+        .timer-base { border: 2px solid #f39c12; flex-direction: column; height: 70px; padding: 5px; font-size: 10px; justify-content: space-around; }
+        .linha { height: 2px; background-color: #d4d4d4; transition: background-color 0.1s; width: 100%; }
+        
+        .branch-group { 
+            grid-column: 4 / 7; 
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            align-items: center; 
+            height: 100%; 
+            position: relative; 
+        }
+        .branch-group-caldeira { 
+            grid-column: 4 / 9;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            align-items: center; 
+            height: 100%; 
+            position: relative; 
+        }
+        .branch-vertical-line { 
+            width: 2px; background-color: #d4d4d4; height: 100%; 
+            position: absolute; left: 50%; transform: translateX(-50%);
+            z-index: 1; transition: background-color 0.1s; 
+        }
+        .branch-horizontal-line { 
+            height: 2px; background-color: #d4d4d4; width: 50%;
+            position: absolute; left: 50%; transform: translateX(-50%);
+            z-index: 1; transition: background-color 0.1s; 
+        }
+        #branch-h-top { top: 20px; } /* Ajustado para a nova altura */
+        #branch-h-bottom { bottom: 20px; } /* Ajustado para a nova altura */
+        .branch-contact { z-index: 2; width: 100%; display: flex; justify-content: center; align-items: center; }
+        .branch-contact-column { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+
+        .energizado { background-color: #6a9955 !important; }
+        .energizado-texto { color: #6a9955 !important; }
+        .energizado-linha { background-color: #6a9955 !important; }
+        .nf:before { content: '/'; color: #ce9178; margin-right: 3px; }
+        .bobina:before { content: '('; margin-right: 2px; }
+        .bobina:after { content: ')'; margin-left: 2px; }
+
+        /* --- PAINEL DE CONTROLE (IHM SIMULADA) --- */
+        #controls-container {
+            display: flex;
+            justify-content: space-between;
+            width: 1400px;
+            margin-top: 20px;
+            gap: 20px;
+        }
+        .panel {
+            background-color: #252526;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #3c3c3c;
+        }
+        
+        .control-button {
+            width: 120px; height: 40px; margin: 10px 0; border: none; color: white; font-size: 14px; font-weight: bold; cursor: pointer; border-radius: 5px;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+
+        /* --- CORES DOS BOTÕES --- */
+        #motor-control-panel button:nth-child(2) { background-color: #27ae60; } 
+        #motor-control-panel button:nth-child(3) { background-color: #c0392b; } 
+        #btn-termico { background-color: #f39c12; } 
+        #btn-termico.active { background-color: #e74c3c; } 
+        #btn-caldeira-on { background-color: #27ae60; } 
+        #btn-caldeira-on.active { background-color: #1abc9c; } 
+        #btn-nivel-ll { background-color: #e74c3c; }
+        #btn-nivel-ll.active { background-color: #c0392b; } 
+        #btn-nivel-ml { background-color: #569cd6; }
+        #btn-nivel-ml.active { background-color: #3498db; }
+        #btn-nivel-hl { background-color: #9b59b6; }
+        #btn-nivel-hl.active { background-color: #8e44ad; }
+
+        /* --- PLANTA INDUSTRIAL (MIMÉTICO) --- */
+        #mimetic-panel {
+            width: 380px;
+            padding: 15px;
+            border: 2px solid #f39c12;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #caldeira-body {
+            position: relative;
+            width: 150px;
+            height: 250px;
+            border: 3px solid #ccc;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            background-color: #4a4a4a;
+            transition: box-shadow 0.5s;
+        }
+        #caldeira-body.heating {
+            box-shadow: 0 0 15px #f39c12, 0 0 5px #f39c12 inset;
+        }
+        #water-level {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background-color: #569cd6;
+            transition: height 0.5s;
+        }
+        .level-ll { height: 10%; } 
+        .level-ml { height: 50%; } 
+        .level-hl { height: 100%; } 
+        .sensor {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid #d4d4d4;
+            right: -20px;
+            transition: background-color 0.2s;
+        }
+        #ll-sensor { bottom: 10%; background-color: #e74c3c; } 
+        #ml-sensor { bottom: 50%; background-color: #569cd6; } 
+        #hl-sensor { bottom: 90%; background-color: #9b59b6; } 
+        .sensor.active { background-color: #6a9955; }
+        .component-status { display: flex; align-items: center; font-size: 14px; margin-top: 10px; font-weight: bold; }
+        .component-light { width: 15px; height: 15px; border-radius: 50%; background-color: #e74c3c; margin-right: 10px; box-shadow: 0 0 0 transparent; transition: background-color 0.3s, box-shadow 0.3s; }
+        .component-light.on { background-color: #6a9955; box-shadow: 0 0 8px #6a9955; }
+        #heater-status { color: #f39c12; margin-top: 5px; }
+        #heater-status .component-light.on { background-color: #f39c12; box-shadow: 0 0 8px #f39c12; }
+        .output-item { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; padding: 5px 0; border-bottom: 1px dotted #3c3c3c; }
+        .output-status { width: 15px; height: 15px; border-radius: 50%; background-color: #e74c3c; transition: background-color 0.2s; }
+        .output-status.output-on { background-color: #6a9955; box-shadow: 0 0 8px #6a9955; }
+        #tabela-verdade-container { width: 350px; }
+        #outputs-panel { width: 350px; }
+        #tabela-verdade { width: 100%; border-collapse: collapse; font-size: 12px; }
+        #tabela-verdade th, #tabela-verdade td { border: 1px solid #3c3c3c; padding: 5px; text-align: center; }
+        #tabela-verdade th { background-color: #343434; color: #d4d4d4; }
+        .estado-atual-linha { background-color: #4a4a4a; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Simulador CLP Integrado com controle de caldeira</h1>
+    
+    <div id="clp-interface">
+        <div id="ladder">
+            
+            <div class="barramento" style="grid-row: 1 / span 8;"></div>
+            
+            <div class="rung-container" style="grid-row: 1 / span 1;">
+                <div id="i2" class="contato-base nf" style="grid-column: 1 / 2;">I2 (Desl.)</div>
+                <div id="i3" class="contato-base nf" style="grid-column: 2 / 3;">I3 (Térmico)</div>
+                <div class="linha" style="grid-column: 3 / 4;"></div>
+                <div class="branch-group" style="grid-column: 4 / 7;">
+                    <div class="branch-vertical-line"></div>
+                    <div id="branch-h-top" class="branch-horizontal-line"></div>
+                    <div id="branch-h-bottom" class="branch-horizontal-line"></div>
+                    <div id="q1-selo" class="contato-base na branch-contact" style="grid-column: 1 / 2;">Q1 (Selo)</div>
+                    <div id="i1" class="contato-base na branch-contact" style="grid-column: 2 / 3;">I1 (Liga)</div>
+                </div>
+                <div class="linha" style="grid-column: 7 / 8;"></div>
+                <div id="q1" class="bobina-base bobina" style="grid-column: 8 / 9;">Q1 (Princ.)</div>
+                <div class="linha" style="grid-column: 9 / 10;"></div>
+                <div id="t40-timer" class="timer-base" style="grid-column: 10 / 11;">
+                    <span style="color: #f39c12;">TON T4:0</span>
+                    <span class="timer-info">Preset: 3000ms</span>
+                    <span id="t40-accum" class="timer-info">Accum: 0ms</span>
+                </div>
+            </div>
+
+            <div class="rung-container" style="grid-row: 2 / span 1;">
+                <div class="linha" style="grid-column: 1 / 2;"></div>
+                <div id="q1-na-rung2" class="contato-base na" style="grid-column: 2 / 3;">Q1 (Princ.)</div>
+                <div class="linha" style="grid-column: 3 / 4;"></div>
+                <div id="t40-dn-nf" class="contato-base nf" style="grid-column: 4 / 5;">T4:0/DN (NF)</div>
+                <div class="linha" style="grid-column: 5 / 6;"></div>
+                <div id="q3-nf" class="contato-base nf" style="grid-column: 6 / 7;">Q3 (Tri. NF)</div>
+                <div class="linha" style="grid-column: 7 / 8;"></div>
+                <div id="q2" class="bobina-base bobina" style="grid-column: 8 / 9;">Q2 (Estrela)</div>
+            </div>
+
+            <div class="rung-container" style="grid-row: 3 / span 1;">
+                <div class="linha" style="grid-column: 1 / 2;"></div>
+                <div id="q1-na-rung3" class="contato-base na" style="grid-column: 2 / 3;">Q1 (Princ.)</div>
+                <div class="linha" style="grid-column: 3 / 4;"></div>
+                <div id="t40-dn-na" class="contato-base na" style="grid-column: 4 / 5;">T4:0/DN (NA)</div>
+                <div class="linha" style="grid-column: 5 / 6;"></div>
+                <div id="q2-nf" class="contato-base nf" style="grid-column: 6 / 7;">Q2 (Est. NF)</div>
+                <div class="linha" style="grid-column: 7 / 8;"></div>
+                <div id="q3" class="bobina-base bobina" style="grid-column: 8 / 9;">Q3 (Triang.)</div>
+            </div>
+
+            <div class="rung-container" style="grid-row: 4 / span 1;">
+                <div class="linha" style="grid-column: 1 / 2;"></div>
+                <div id="q3-na-rung4" class="contato-base na" style="grid-column: 2 / 3;">Q3 (Triang.)</div>
+                <div class="linha" style="grid-column: 3 / 11;"></div>
+                <div id="l1" class="bobina-base bobina" style="grid-column: 11 / 12;">L1 (Ligado)</div>
+            </div>
+            
+            <div class="divider" style="grid-row: 5;">CONTROLE DE NÍVEL DA CALDEIRA</div>
+            
+            <div class="rung-container" style="grid-row: 6 / span 1;">
+                <div class="linha" style="grid-column: 1 / 2;"></div>
+                <div id="i4-na" class="contato-base na" style="grid-column: 2 / 3;">I4 (Sistema ON)</div>
+                <div class="linha" style="grid-column: 3 / 4;"></div>
+                <div class="branch-group-caldeira">
+                    <div class="branch-vertical-line"></div>
+                    <div class="branch-horizontal-line" style="top: 25px;"></div>
+                    <div class="branch-horizontal-line" style="bottom: 25px;"></div>
+                    <div id="i5-na" class="contato-base na branch-contact" style="grid-column: 1 / 2; margin-top: -25px;">I5 (LL)</div>
+                    <div class="branch-contact branch-contact-column" style="grid-column: 2 / 3; margin-top: 25px;">
+                        <div id="q4-selo-r5" class="contato-base na" style="width: 100%; margin-bottom: 5px;">Q4 (Selo)</div>
+                        <div id="i7-na" class="contato-base na" style="width: 100%;">I7 (ML)</div> 
+                    </div>
+                </div>
+                <div class="linha" style="grid-column: 9 / 10;"></div>
+                <div id="i6-nf" class="contato-base nf" style="grid-column: 10 / 11;">I6 (HL NF)</div>
+                <div class="linha" style="grid-column: 11 / 12;"></div>
+                <div id="q4" class="bobina-base bobina" style="grid-column: 12 / 13;">Q4 (Bomba)</div>
+            </div>
+
+            <div class="rung-container" style="grid-row: 7 / span 1;">
+                <div class="linha" style="grid-column: 1 / 2;"></div>
+                <div id="i4-na-r6" class="contato-base na" style="grid-column: 2 / 3;">I4 (Sistema ON)</div>
+                <div class="linha" style="grid-column: 3 / 4;"></div>
+                <div id="i5-nf-r6" class="contato-base nf" style="grid-column: 4 / 5;">I5 (LL NF)</div> 
+                <div class="linha" style="grid-column: 5 / 6;"></div>
+                <div id="i7-na-r6" class="contato-base na" style="grid-column: 6 / 7;">I7 (ML NA)</div> 
+                <div class="linha" style="grid-column: 7 / 8;"></div>
+                <div id="q4-nf" class="contato-base nf" style="grid-column: 8 / 9;">Q4 (Bomba NF)</div>
+                <div class="linha" style="grid-column: 9 / 10;"></div>
+                <div id="q5" class="bobina-base bobina" style="grid-column: 10 / 11;">Q5 (Aquecimento)</div>
+            </div>
+
+            <div class="barramento right" style="grid-row: 1 / span 8;"></div>
+            
+        </div>
+    </div>
+    
+    <div id="controls-container">
+        
+        <div id="motor-control-panel" class="panel">
+            <h3>Controle Estrela-Triângulo</h3>
+            <button class="control-button" onclick="pulseInput('i1')">LIGAR (I1)</button>
+            <button class="control-button" onclick="pulseInputNC('i2')">DESLIGA (I2)</button>
+            <button id="btn-termico" class="control-button" onclick="toggleInput('i3')">TÉRMICO (I3)</button>
+        </div>
+
+        <div id="caldeira-control-panel" class="panel">
+            <h3>Controle de Nível (Caldeira)</h3>
+            <button id="btn-caldeira-on" class="control-button" onclick="toggleInput('i4')">SISTEMA (I4)</button>
+            <p style="margin-top: 15px; font-weight: bold;">Simulação de Níveis (Sensores):</p>
+            <button id="btn-nivel-ll" class="control-button" onclick="setLevelState('LL')">NÍVEL BAIXO (LL)</button>
+            <button id="btn-nivel-ml" class="control-button" onclick="setLevelState('ML')">NÍVEL MÉDIO (ML)</button>
+            <button id="btn-nivel-hl" class="control-button" onclick="setLevelState('HL')">NÍVEL ALTO (HL)</button>
+        </div>
+        
+        <div id="mimetic-panel" class="panel">
+            <h3>Planta Industrial: Caldeira (Mimético)</h3>
+            <div id="caldeira-body">
+                <div id="water-level"></div>
+                <div id="ll-sensor" class="sensor"></div>
+                <div id="ml-sensor" class="sensor"></div>
+                <div id="hl-sensor" class="sensor"></div>
+            </div>
+            <div id="pump-status" class="component-status">
+                <div id="q4-light" class="component-light"></div>
+                Bomba (Q4)
+            </div>
+            <div id="heater-status" class="component-status">
+                <div id="q5-light" class="component-light"></div>
+                Válvula Aquecimento (Q5)
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+            <div id="outputs-panel" class="panel">
+                <h3>OUTPUTS (Geral)</h3>
+                <div class="output-item"><label>Q1 (Principal)</label><div id="q1-status" class="output-status"></div></div>
+                <div class="output-item"><label>Q2 (Estrela)</label><div id="q2-status" class="output-status"></div></div>
+                <div class="output-item"><label>Q3 (Triângulo)</label><div id="q3-status" class="output-status"></div></div>
+                <div class="output-item"><label>Q4 (Bomba)</label><div id="q4-status" class="output-status"></div></div>
+                <div class="output-item"><label>Q5 (Aquec.)</label><div id="q5-status" class="output-status"></div></div>
+                <div class="output-item"><label>L1 (Ligado)</label><div id="l1-status" class="output-status"></div></div>
+            </div>
+            <div id="tabela-verdade-container" class="panel">
+                <h3>Tabela Estrela-Triângulo</h3>
+                <table id="tabela-verdade">
+                    <thead><tr><th>Estado</th><th>Tempo (t)</th><th>Q1</th><th>Q2</th><th>Q3</th></tr></thead>
+                    <tbody>
+                        <tr id="estado-desligado"><td>**Parado**</td><td>t = 0</td><td>0</td><td>0</td><td>0</td></tr>
+                        <tr id="estado-estrela"><td>**Estrela**</td><td>0 &lt; t &lt; 3s</td><td>1</td><td>1</td><td>0</td></tr>
+                        <tr id="estado-triangulo"><td>**Triângulo**</td><td>t &gt; 3s</td><td>1</td><td>0</td><td>1</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- VARIÁVEIS DE ESTADO (MEMORY) ---
+        let inputs = {
+            'i1': false, 'i2': true, 'i3': true, 
+            'i4': false, 'i5': false, 'i6': true, 'i7': true
+        };
+        let outputs = {
+            'q1': false, 'q2': false, 'q3': false, 'l1': false,
+            'q4': false, 'q5': false
+        };
+        let timer = { preset: 3000, accum: 0, active: false, done: false };
+        let timerInterval = null;
+        
+        // --- REFERÊNCIAS DE ELEMENTOS ---
+        const elem = {
+            i1: document.getElementById('i1'), i2: document.getElementById('i2'), i3: document.getElementById('i3'),
+            i4: document.getElementById('i4-na'), i5: document.getElementById('i5-na'), i6: document.getElementById('i6-nf'),
+            i4naR6: document.getElementById('i4-na-r6'), i5nfR6: document.getElementById('i5-nf-r6'), 
+            i7na: document.getElementById('i7-na'), i7naR6: document.getElementById('i7-na-r6'),
+            q4seloR5: document.getElementById('q4-selo-r5'), q4nf: document.getElementById('q4-nf'),
+            q1: document.getElementById('q1'), q2: document.getElementById('q2'), q3: document.getElementById('q3'), l1: document.getElementById('l1'),
+            q4: document.getElementById('q4'), q5: document.getElementById('q5'),
+            q1status: document.getElementById('q1-status'), q2status: document.getElementById('q2-status'), q3status: document.getElementById('q3-status'),
+            q4status: document.getElementById('q4-status'), q5status: document.getElementById('q5-status'), l1status: document.getElementById('l1-status'),
+            caldeiraBody: document.getElementById('caldeira-body'), waterLevel: document.getElementById('water-level'),
+            llSensor: document.getElementById('ll-sensor'), mlSensor: document.getElementById('ml-sensor'), hlSensor: document.getElementById('hl-sensor'), 
+            q4Light: document.getElementById('q4-light'), q5Light: document.getElementById('q5-light'),
+            btnTermico: document.getElementById('btn-termico'), btnCaldeiraON: document.getElementById('btn-caldeira-on'), 
+            btnNivelLL: document.getElementById('btn-nivel-ll'), btnNivelML: document.getElementById('btn-nivel-ml'), btnNivelHL: document.getElementById('btn-nivel-hl'), 
+            t40accum: document.getElementById('t40-accum'), t40timer: document.getElementById('t40-timer'),
+            tvDesligado: document.getElementById('estado-desligado'), tvEstrela: document.getElementById('estado-estrela'), tvTriangulo: document.getElementById('estado-triangulo'),
+            q1selo: document.getElementById('q1-selo'), q1naRung2: document.getElementById('q1-na-rung2'), q1naRung3: document.getElementById('q1-na-rung3'), 
+            q3nf: document.getElementById('q3-nf'), q2nf: document.getElementById('q2-nf'), q3naRung4: document.getElementById('q3-na-rung4'),
+            t40dnNF: document.getElementById('t40-dn-nf'), t40dnNA: document.getElementById('t40-dn-na'),
+        };
+        
+        // --- LÓGICA DO TEMPORIZADOR ---
+        function startTimer() { 
+            if (timerInterval) return;
+            timer.active = true;
+            elem.t40timer.classList.add('energizado');
+            timerInterval = setInterval(() => {
+                if (timer.accum < timer.preset) {
+                    timer.accum += 100;
+                } else {
+                    timer.accum = timer.preset;
+                    timer.done = true;
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+                runLadderLogic();
+            }, 100);
+        }
+        function resetTimer() { 
+            clearInterval(timerInterval);
+            timerInterval = null;
+            timer.accum = 0; timer.active = false; timer.done = false;
+            elem.t40timer.classList.remove('energizado');
+        }
+
+        // --- FUNÇÃO PRINCIPAL DO CLP ---
+        function runLadderLogic() {
+            // Lógica Estrela-Triângulo
+            let q1_novo_estado = inputs['i2'] && inputs['i3'] && (inputs['i1'] || outputs['q1']);
+            if (!q1_novo_estado) {
+                outputs['q1'] = outputs['q2'] = outputs['q3'] = outputs['l1'] = false;
+                resetTimer();
+            } else {
+                outputs['q1'] = true;
+                if (!timer.active && !timer.done) startTimer();
+            }
+            outputs['q2'] = outputs['q1'] && !timer.done && !outputs['q3'];
+            outputs['q3'] = outputs['q1'] && timer.done && !outputs['q2'];
+            outputs['l1'] = outputs['q3'];
+
+            // Lógica da Caldeira
+            let cond_liga_bomba = inputs['i5'] || (outputs['q4'] && inputs['i7']);
+            outputs['q4'] = inputs['i4'] && cond_liga_bomba && inputs['i6'];
+            outputs['q5'] = inputs['i4'] && !inputs['i5'] && inputs['i7'] && !outputs['q4'];
+
+            updateDisplay();
+        }
+
+        // --- FUNÇÕES DE ATUALIZAÇÃO VISUAL ---
+        function updateDisplay() {
+            // Motor
+            elem.i2.classList.toggle('energizado', inputs['i2']);
+            elem.i3.classList.toggle('energizado', inputs['i3']);
+            elem.i1.classList.toggle('energizado', inputs['i1']);
+            elem.q1selo.classList.toggle('energizado', outputs['q1']);
+            elem.q1.classList.toggle('energizado', outputs['q1']);
+            elem.q2.classList.toggle('energizado', outputs['q2']);
+            elem.q3.classList.toggle('energizado', outputs['q3']);
+            elem.l1.classList.toggle('energizado', outputs['l1']);
+            elem.t40accum.textContent = `Accum: ${timer.accum}ms`;
+            elem.q1naRung2.classList.toggle('energizado', outputs['q1']);
+            elem.t40dnNF.classList.toggle('energizado', outputs['q1'] && !timer.done);
+            elem.q3nf.classList.toggle('energizado', outputs['q1'] && !timer.done && !outputs['q3']);
+            elem.q1naRung3.classList.toggle('energizado', outputs['q1']);
+            elem.t40dnNA.classList.toggle('energizado', outputs['q1'] && timer.done);
+            elem.q2nf.classList.toggle('energizado', outputs['q1'] && timer.done && !outputs['q2']);
+            elem.q3naRung4.classList.toggle('energizado', outputs['q3']);
+            
+            // Caldeira
+            elem.i4.classList.toggle('energizado', inputs['i4']);
+            elem.q4.classList.toggle('energizado', outputs['q4']);
+            let energiaAteBranchR5 = inputs['i4'];
+            let energiaCaminhoLL = energiaAteBranchR5 && inputs['i5'];
+            let energiaCaminhoSelo = energiaAteBranchR5 && outputs['q4'] && inputs['i7'];
+            elem.i5.classList.toggle('energizado', energiaCaminhoLL);
+            elem.q4seloR5.classList.toggle('energizado', energiaCaminhoSelo);
+            elem.i7na.classList.toggle('energizado', energiaCaminhoSelo);
+            let energiaAposBranch = energiaAteBranchR5 && (inputs['i5'] || (outputs['q4'] && inputs['i7']));
+            elem.i6.classList.toggle('energizado', energiaAposBranch && inputs['i6']);
+            
+            let energiaRung6 = inputs['i4'];
+            elem.i4naR6.classList.toggle('energizado', energiaRung6);
+            energiaRung6 = energiaRung6 && !inputs['i5'];
+            elem.i5nfR6.classList.toggle('energizado', energiaRung6);
+            energiaRung6 = energiaRung6 && inputs['i7'];
+            elem.i7naR6.classList.toggle('energizado', energiaRung6);
+            energiaRung6 = energiaRung6 && !outputs['q4'];
+            elem.q4nf.classList.toggle('energizado', energiaRung6);
+            elem.q5.classList.toggle('energizado', outputs['q5']);
+            
+            // Mimético
+            elem.waterLevel.className = 'water-level';
+            if (inputs['i5']) { elem.waterLevel.classList.add('level-ll'); }
+            else if (!inputs['i6']) { elem.waterLevel.classList.add('level-hl'); }
+            else { elem.waterLevel.classList.add('level-ml'); }
+            elem.llSensor.classList.toggle('active', inputs['i5']); 
+            elem.mlSensor.classList.toggle('active', inputs['i7']); 
+            elem.hlSensor.classList.toggle('active', !inputs['i6']);
+            elem.q4Light.classList.toggle('on', outputs['q4']);
+            elem.q5Light.classList.toggle('on', outputs['q5']);
+            elem.caldeiraBody.classList.toggle('heating', outputs['q5']);
+
+            // Status e Tabela
+            elem.q1status.classList.toggle('output-on', outputs['q1']);
+            elem.q2status.classList.toggle('output-on', outputs['q2']);
+            elem.q3status.classList.toggle('output-on', outputs['q3']);
+            elem.q4status.classList.toggle('output-on', outputs['q4']);
+            elem.q5status.classList.toggle('output-on', outputs['q5']);
+            elem.l1status.classList.toggle('output-on', outputs['l1']);
+            elem.tvDesligado.classList.remove('estado-atual-linha');
+            elem.tvEstrela.classList.remove('estado-atual-linha');
+            elem.tvTriangulo.classList.remove('estado-atual-linha');
+            if (!outputs['q1']) { elem.tvDesligado.classList.add('estado-atual-linha'); }
+            else if (outputs['q2']) { elem.tvEstrela.classList.add('estado-atual-linha'); }
+            else if (outputs['q3']) { elem.tvTriangulo.classList.add('estado-atual-linha'); }
+        }
+
+        // --- FUNÇÕES DE INTERAÇÃO COM O USUÁRIO (IHM) ---
+        function pulseInput(inputId) {
+            inputs[inputId] = true;
+            runLadderLogic();
+            setTimeout(() => { inputs[inputId] = false; runLadderLogic(); }, 200);
+        }
+        function pulseInputNC(inputId) {
+            inputs[inputId] = false;
+            runLadderLogic();
+            setTimeout(() => { inputs[inputId] = true; runLadderLogic(); }, 200);
+        }
+        function toggleInput(inputId) {
+            const button = (inputId === 'i3') ? elem.btnTermico : elem.btnCaldeiraON;
+            inputs[inputId] = !inputs[inputId];
+            button.classList.toggle('active', inputId === 'i4' ? inputs[inputId] : !inputs[inputId]);
+            runLadderLogic();
+        }
+        function setLevelState(level) {
+            elem.btnNivelLL.classList.remove('active');
+            elem.btnNivelML.classList.remove('active');
+            elem.btnNivelHL.classList.remove('active');
+            switch (level) {
+                case 'LL':
+                    inputs['i5'] = true; inputs['i6'] = true; inputs['i7'] = false;
+                    elem.btnNivelLL.classList.add('active'); break;
+                case 'ML':
+                    inputs['i5'] = false; inputs['i6'] = true; inputs['i7'] = true;
+                    elem.btnNivelML.classList.add('active'); break;
+                case 'HL':
+                    inputs['i5'] = false; inputs['i6'] = false; inputs['i7'] = true;
+                    elem.btnNivelHL.classList.add('active'); break;
+            }
+            runLadderLogic();
+        }
+
+        // --- INICIALIZAÇÃO ---
+        window.onload = () => { setLevelState('ML'); };
+    </script>
+</body>
+</html>
