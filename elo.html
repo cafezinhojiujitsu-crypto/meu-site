@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ferramenta de Lógica Booleana Completa (ABNT/IEC)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --panel-color: #ffffff;
+            --text-color: #2c3e50;
+            --primary-color: #3498db;
+            --secondary-color: #2ecc71;
+            --border-color: #dcdfe6;
+            --shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px;
+        }
+        .main-container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--panel-color);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            padding: 25px;
+        }
+        h1 { text-align: center; margin-bottom: 25px; color: var(--text-color); }
+        .controls {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px; flex-wrap: wrap; gap: 15px;
+        }
+        .controls label { font-weight: 500; }
+        .controls select { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 1rem; }
+        .controls .buttons { display: flex; gap: 10px; }
+        .controls button {
+            padding: 10px 20px; border: none; border-radius: 6px;
+            font-size: 1rem; font-weight: 500; cursor: pointer; transition: all 0.2s ease;
+        }
+        #btn-simplify { background-color: var(--primary-color); color: white; }
+        #btn-simplify:hover { background-color: #2980b9; }
+        #btn-reset { background-color: #e74c3c; color: white; }
+        #btn-reset:hover { background-color: #c0392b; }
+        
+        .content-wrapper { display: flex; gap: 25px; flex-wrap: wrap; }
+        .left-panel { flex: 1; min-width: 320px; }
+        .right-panel { flex: 2; min-width: 400px; display: flex; flex-direction: column; gap: 20px; }
+
+        .kmap-area { position: relative; display: inline-block; }
+        .kmap-wrapper { display: flex; align-items: flex-start; }
+        .labels-left { display: flex; flex-direction: column; padding-top: 30px; text-align: right; }
+        .label-left-vars { padding-right: 5px; height: 30px; font-weight: bold; }
+        .label-row { height: 70px; display: flex; align-items: center; justify-content: flex-end; padding-right: 5px; font-family: 'Roboto Mono', monospace; font-weight: bold; }
+        
+        .content-right { display: flex; flex-direction: column; }
+        .labels-top-container { display: flex; height: 30px; }
+        .corner-label { width: 45px; }
+        .labels-top { display: flex; }
+        .label-col { width: 70px; display: flex; align-items: center; justify-content: center; font-family: 'Roboto Mono', monospace; font-weight: bold; }
+
+        .kmap-grid { display: grid; border: 1px solid var(--border-color); }
+        .kmap-cell {
+            width: 70px; height: 70px;
+            border: 1px solid var(--border-color);
+            display: flex; justify-content: center; align-items: center;
+            font-size: 2rem; font-weight: 500; cursor: pointer; user-select: none;
+            transition: background-color 0.2s;
+        }
+        .kmap-cell.active { background-color: #d4edda; color: #155724; }
+        
+        #group-overlays { position: absolute; top: 30px; left: 45px; pointer-events: none; }
+        .group-overlay {
+            position: absolute; pointer-events: none; border: 3px solid;
+            border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+        .output-container {
+            padding: 20px; background-color: #ecf0f1;
+            border-radius: 8px; border: 1px solid var(--border-color);
+        }
+        .left-panel .output-container { margin-top: 20px; }
+        .output-container h2 { margin-bottom: 10px; font-size: 1.2rem; font-family: 'Roboto', sans-serif; font-weight: 500; }
+        #result-expression { font-family: 'Roboto Mono', monospace; font-size: 1.5rem; font-weight: 700; color: var(--secondary-color); word-break: break-all; }
+
+        #truth-table-container {
+            max-height: 250px; overflow-y: auto;
+            border: 1px solid var(--border-color); border-radius: 8px;
+        }
+        #truth-table { width: 100%; border-collapse: collapse; }
+        #truth-table th, #truth-table td {
+            border: 1px solid var(--border-color); padding: 8px;
+            text-align: center; font-family: 'Roboto Mono', monospace;
+        }
+        #truth-table thead { background-color: #e9ecef; position: sticky; top: 0; }
+        #truth-table tbody tr:nth-child(even) { background-color: #f8f9fa; }
+
+        #circuit-diagram-container {
+            border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 10px; min-height: 200px;
+        }
+        #circuit-svg { width: 100%; height: 100%; }
+        /* Estilos para o SVG do circuito */
+        .gate-rect { fill: var(--panel-color); stroke: var(--text-color); stroke-width: 2; }
+        .gate-inverter-circle { fill: var(--panel-color); stroke: var(--text-color); stroke-width: 2; }
+        .wire { fill: none; stroke: #7f8c8d; stroke-width: 1.5; }
+        .gate-text { font-family: 'Roboto Mono', monospace; font-size: 14px; font-weight: bold; text-anchor: middle; dominant-baseline: middle; }
+        .input-text { font-family: 'Roboto Mono', monospace; font-size: 14px; font-weight: bold; text-anchor: middle; }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <h1>Ferramenta de Lógica Booleana</h1>
+        <div class="controls">
+            <div>
+                <label for="variable-select">Número de Variáveis: </label>
+                <select id="variable-select">
+                    <option value="3">3 (ABC)</option>
+                    <option value="4" selected>4 (ABCD)</option>
+                </select>
+            </div>
+            <div class="buttons">
+                <button id="btn-simplify">Simplificar</button>
+                <button id="btn-reset">Resetar</button>
+            </div>
+        </div>
+        
+        <div class="content-wrapper">
+            <div class="left-panel">
+                <div class="kmap-area">
+                    <div id="kmap-container"></div>
+                    <div id="group-overlays"></div>
+                </div>
+                 <div class="output-container">
+                    <h2>Expressão Simplificada</h2>
+                    <code id="result-expression">Y = ?</code>
+                </div>
+            </div>
+            <div class="right-panel">
+                <div class="output-container">
+                    <h2>Tabela Verdade</h2>
+                    <div id="truth-table-container">
+                        </div>
+                </div>
+                <div class="output-container">
+                    <h2>Circuito Lógico (ABNT/IEC)</h2>
+                    <div id="circuit-diagram-container">
+                        <svg id="circuit-svg"></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const varSelect = document.getElementById('variable-select');
+        const simplifyBtn = document.getElementById('btn-simplify');
+        const resetBtn = document.getElementById('btn-reset');
+        const kmapContainer = document.getElementById('kmap-container');
+        const resultExpression = document.getElementById('result-expression');
+        const overlayContainer = document.getElementById('group-overlays');
+        const truthTableContainer = document.getElementById('truth-table-container');
+        const circuitSvg = document.getElementById('circuit-svg');
+
+        let numVars = 4;
+        let kmapGrid = [];
+        const grayCode = ['00', '01', '11', '10'];
+        const varNames = ['A', 'B', 'C', 'D'];
+        const groupColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#1abc9c', '#e67e22', '#34495e'];
+        const mintermMap3 = [[0, 1, 3, 2], [4, 5, 7, 6]];
+        const mintermMap4 = [[0, 1, 3, 2], [4, 5, 7, 6], [12, 13, 15, 14], [8, 9, 11, 10]];
+
+        function createKMap() {
+            kmapContainer.innerHTML = '';
+            overlayContainer.innerHTML = '';
+            truthTableContainer.innerHTML = 'Aperte "Simplificar" para gerar a tabela.';
+            circuitSvg.innerHTML = '';
+            resultExpression.textContent = 'Y = ?';
+            
+            const rows = numVars === 3 ? 2 : 4;
+            const rowLabels = numVars === 3 ? ['0', '1'] : grayCode;
+            const cols = numVars === 3 ? 4 : 4;
+            const colLabels = grayCode;
+
+            kmapGrid = Array(rows).fill(0).map(() => Array(cols).fill(0));
+            const wrapper = document.createElement('div');
+            wrapper.className = 'kmap-wrapper';
+            const leftLabelContainer = document.createElement('div');
+            leftLabelContainer.className = 'labels-left';
+            leftLabelContainer.innerHTML = `<div class="label-left-vars">${numVars === 3 ? 'A' : 'AB'}</div>`;
+            rowLabels.forEach(label => leftLabelContainer.innerHTML += `<div class="label-row">${label}</div>`);
+            const rightContent = document.createElement('div');
+            rightContent.className = 'content-right';
+            const topLabelContainer = document.createElement('div');
+            topLabelContainer.className = 'labels-top-container';
+            topLabelContainer.innerHTML = `<div class="corner-label">${numVars === 3 ? 'BC' : 'CD'}</div>`;
+            const colLabelDivs = document.createElement('div');
+            colLabelDivs.className = 'labels-top';
+            colLabels.forEach(label => colLabelDivs.innerHTML += `<div class="label-col">${label}</div>`);
+            topLabelContainer.appendChild(colLabelDivs);
+            const grid = document.createElement('div');
+            grid.className = 'kmap-grid';
+            grid.style.gridTemplateColumns = `repeat(${cols}, 70px)`;
+            
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'kmap-cell'; cell.textContent = '0';
+                    cell.addEventListener('click', () => {
+                        kmapGrid[r][c] = 1 - kmapGrid[r][c];
+                        cell.textContent = kmapGrid[r][c];
+                        cell.classList.toggle('active', kmapGrid[r][c] === 1);
+                        overlayContainer.innerHTML = ''; resultExpression.textContent = 'Y = ?';
+                    });
+                    grid.appendChild(cell);
+                }
+            }
+            rightContent.appendChild(topLabelContainer); rightContent.appendChild(grid);
+            wrapper.appendChild(leftLabelContainer); wrapper.appendChild(rightContent);
+            kmapContainer.appendChild(wrapper);
+        }
+
+        function simplify() {
+            const minterms = [];
+            const map = numVars === 3 ? mintermMap3 : mintermMap4;
+            for (let r = 0; r < kmapGrid.length; r++) {
+                for (let c = 0; c < kmapGrid[0].length; c++) {
+                    if (kmapGrid[r][c] === 1) minterms.push(map[r][c]);
+                }
+            }
+
+            if (minterms.length === 0) return { terms: ['0'], groups: [], minterms };
+            if (minterms.length === Math.pow(2, numVars)) return { terms: ['1'], groups: [], minterms };
+
+            let groups = minterms.map(m => ({ term: m.toString(2).padStart(numVars, '0'), minterms: [m], merged: false }));
+            let primeImplicants = [];
+            while (groups.length > 0) {
+                let newGroups = [];
+                for (let i = 0; i < groups.length; i++) {
+                    for (let j = i + 1; j < groups.length; j++) {
+                        let diff = 0; let diffIndex = -1;
+                        for (let k = 0; k < numVars; k++) {
+                            if (groups[i].term[k] !== groups[j].term[k]) { diff++; diffIndex = k; }
+                        }
+                        if (diff === 1) {
+                            groups[i].merged = true; groups[j].merged = true;
+                            const newTerm = groups[i].term.substring(0, diffIndex) + '-' + groups[i].term.substring(diffIndex + 1);
+                            const newMinterms = [...new Set([...groups[i].minterms, ...groups[j].minterms])].sort((a,b)=>a-b);
+                            if (!newGroups.find(g => g.term === newTerm)) newGroups.push({ term: newTerm, minterms: newMinterms, merged: false });
+                        }
+                    }
+                }
+                primeImplicants.push(...groups.filter(g => !g.merged));
+                groups = newGroups;
+            }
+
+            let finalPrimes = [];
+            primeImplicants.forEach(p => { if(!finalPrimes.find(f => f.term === p.term)) finalPrimes.push(p); });
+
+            let chart = minterms.map(m => ({ minterm: m, coveredBy: finalPrimes.filter(p => p.minterms.includes(m)) }));
+            let essentialPrimes = [];
+            let coveredMinterms = new Set();
+
+            chart.forEach(m => {
+                if(m.coveredBy.length === 1) {
+                    const p = m.coveredBy[0];
+                    if(!essentialPrimes.find(e => e.term === p.term)) {
+                        essentialPrimes.push(p);
+                        p.minterms.forEach(mt => coveredMinterms.add(mt));
+                    }
+                }
+            });
+
+            let remainingMinterms = minterms.filter(m => !coveredMinterms.has(m));
+            let remainingPrimes = finalPrimes.filter(p => !essentialPrimes.find(e => e.term === p.term));
+
+            while(remainingMinterms.length > 0) {
+                remainingPrimes.sort((a,b) => {
+                    const coverA = a.minterms.filter(m => remainingMinterms.includes(m)).length;
+                    const coverB = b.minterms.filter(m => remainingMinterms.includes(m)).length;
+                    if (coverB !== coverA) return coverB - coverA;
+                    return (a.term.match(/-/g) || []).length - (b.term.match(/-/g) || []).length;
+                });
+                let bestPrime = remainingPrimes[0];
+                if (!bestPrime) break;
+                essentialPrimes.push(bestPrime);
+                bestPrime.minterms.forEach(m => coveredMinterms.add(m));
+                remainingMinterms = minterms.filter(m => !coveredMinterms.has(m));
+                remainingPrimes = remainingPrimes.filter(p => p.term !== bestPrime.term);
+            }
+
+            const terms = essentialPrimes.map(p => termToString(p.term)).sort((a,b) => a.localeCompare(b));
+            const finalGroups = essentialPrimes.map(p => termToGroupCoords(p.term));
+            
+            return { terms, groups: finalGroups, minterms };
+        }
+
+        function termToString(term) {
+            let result = '';
+            for (let i = 0; i < numVars; i++) {
+                if (term[i] !== '-') {
+                    result += varNames[i];
+                    if (term[i] === '0') result += "'";
+                }
+            }
+            return result || '1';
+        }
+
+        function termToGroupCoords(term) {
+            const group = [];
+            const dashes = (term.match(/-/g) || []).length;
+            for(let i=0; i<Math.pow(2, dashes); i++) {
+                const bin = i.toString(2).padStart(dashes, '0');
+                let tempTerm = term; let dashCount = 0;
+                for(let j=0; j<numVars; j++) { if(tempTerm[j] === '-') tempTerm = tempTerm.substring(0, j) + bin[dashCount++] + tempTerm.substring(j+1); }
+                const minterm = parseInt(tempTerm, 2);
+                const map = numVars === 3 ? mintermMap3 : mintermMap4;
+                for(let r=0; r<map.length; r++) { for(let c=0; c<map[0].length; c++) { if(map[r][c] === minterm) group.push({r,c}); } }
+            }
+            return group;
+        }
+
+        function drawGroupsUI(groups) {
+            overlayContainer.innerHTML = '';
+            const R = kmapGrid.length, C = kmapGrid[0].length;
+            groups.forEach((group, index) => {
+                const rows = [...new Set(group.map(c => c.r))].sort((a,b)=>a-b);
+                const cols = [...new Set(group.map(c => c.c))].sort((a,b)=>a-b);
+                const rowSegments = segment(rows, R);
+                const colSegments = segment(cols, C);
+                for(const rs of rowSegments) {
+                    for(const cs of colSegments) {
+                        const r_start = rs[0]; const c_start = cs[0];
+                        const overlay = document.createElement('div');
+                        overlay.className = 'group-overlay';
+                        overlay.style.borderColor = groupColors[index % groupColors.length];
+                        overlay.style.top = `${r_start * 70 - 3}px`;
+                        overlay.style.left = `${c_start * 70 - 3}px`;
+                        overlay.style.width = `${cs.length * 70 + 6}px`;
+                        overlay.style.height = `${rs.length * 70 + 6}px`;
+                        overlayContainer.appendChild(overlay);
+                    }
+                }
+            });
+        }
+        
+        function segment(arr, max) {
+            if (arr.length === 0) return [];
+            let segments = [[arr[0]]];
+            for (let i = 1; i < arr.length; i++) {
+                if (arr[i] === (arr[i-1] + 1)) segments[segments.length - 1].push(arr[i]);
+                else segments.push([arr[i]]);
+            }
+            if (segments.length > 1 && segments[0][0] === 0 && segments[segments.length - 1][segments[segments.length-1].length - 1] === max - 1) {
+                const last = segments.pop();
+                segments[0] = [...last, ...segments[0]];
+            }
+            return segments;
+        }
+
+        function generateTruthTable(minterms) {
+            truthTableContainer.innerHTML = '';
+            const table = document.createElement('table');
+            table.id = 'truth-table';
+            let headerHtml = '<thead><tr>';
+            for (let i = 0; i < numVars; i++) headerHtml += `<th>${varNames[i]}</th>`;
+            headerHtml += `<th>Y</th></tr></thead>`;
+            table.innerHTML = headerHtml;
+            const tbody = document.createElement('tbody');
+            for (let i = 0; i < Math.pow(2, numVars); i++) {
+                let bodyRow = '<tr>';
+                const bin = i.toString(2).padStart(numVars, '0');
+                for (let j = 0; j < numVars; j++) bodyRow += `<td>${bin[j]}</td>`;
+                const output = minterms.includes(i) ? '1' : '0';
+                bodyRow += `<td><b>${output}</b></td></tr>`;
+                tbody.innerHTML += bodyRow;
+            }
+            table.appendChild(tbody);
+            truthTableContainer.appendChild(table);
+        }
+    
+        // --- FUNÇÃO DE DESENHO DO CIRCUITO ABNT/IEC CORRIGIDA ---
+        function drawCircuit(terms) {
+            circuitSvg.innerHTML = '';
+            const NS = "http://www.w3.org/2000/svg";
+            
+            function createSvgElement(tag, attributes) {
+                const el = document.createElementNS(NS, tag);
+                for (const key in attributes) el.setAttribute(key, attributes[key]);
+                return el;
+            }
+
+            function parseTerm(term) {
+                const literals = [];
+                for (let i = 0; i < term.length; i++) {
+                    if (i + 1 < term.length && term[i+1] === "'") {
+                        literals.push(term[i] + "'");
+                        i++;
+                    } else {
+                        literals.push(term[i]);
+                    }
+                }
+                return literals;
+            }
+
+            if (terms.length === 1 && (terms[0] === '0' || terms[0] === '1')) {
+                circuitSvg.appendChild(createSvgElement('text', { x: "50%", y: "50%", "dominant-baseline": "middle", "text-anchor": "middle", class: "input-text", textContent: `Saída Y = ${terms[0]}` }));
+                return;
+            }
+
+            const PADDING = 20, INPUT_X = 30, NOT_GATE_X = INPUT_X + 50, AND_GATE_X = NOT_GATE_X + 80, OR_GATE_X = AND_GATE_X + 80, OUTPUT_X = OR_GATE_X + 70;
+            let yPos = PADDING + 20;
+            const inputCoords = {};
+            const allLiterals = new Set(terms.flatMap(parseTerm));
+            const neededVars = [...new Set(Array.from(allLiterals).join('').replace(/'/g, ''))];
+            
+            for (let i = 0; i < numVars; i++) {
+                const v = varNames[i];
+                if (!neededVars.includes(v)) continue;
+                
+                circuitSvg.appendChild(createSvgElement('text', { x: INPUT_X - 15, y: yPos + 4, class: 'input-text', textContent: v }));
+                inputCoords[v] = { x: INPUT_X, y: yPos };
+
+                if (allLiterals.has(v + "'")) {
+                    circuitSvg.appendChild(createSvgElement('line', { x1: INPUT_X, y1: yPos, x2: NOT_GATE_X, y2: yPos, class: 'wire' }));
+                    circuitSvg.appendChild(createSvgElement('rect', { x: NOT_GATE_X, y: yPos-15, width: 30, height: 30, class: 'gate-rect' }));
+                    circuitSvg.appendChild(createSvgElement('text', { x: NOT_GATE_X + 15, y: yPos, class: 'gate-text', textContent: '1'}));
+                    circuitSvg.appendChild(createSvgElement('circle', { cx: NOT_GATE_X + 30, cy: yPos, r: 4, class: 'gate-inverter-circle' }));
+                    inputCoords[v + "'"] = { x: NOT_GATE_X + 34, y: yPos };
+                }
+                yPos += 40;
+            }
+
+            const andOutputs = [];
+            yPos = PADDING;
+            const validTerms = terms.filter(t => t !== '1');
+            validTerms.forEach(term => {
+                const literals = parseTerm(term);
+                const termHeight = Math.max(30, (literals.length) * 20);
+                const andY = yPos + termHeight / 2;
+                
+                let startX = (literals.length === 1) ? inputCoords[literals[0]].x : AND_GATE_X + 40;
+
+                if (literals.length > 1) {
+                    circuitSvg.appendChild(createSvgElement('rect', { x: AND_GATE_X, y: yPos, width: 40, height: termHeight, class: 'gate-rect' }));
+                    circuitSvg.appendChild(createSvgElement('text', { x: AND_GATE_X + 20, y: andY, class: 'gate-text', textContent: '&'}));
+                }
+                
+                literals.forEach((literal, i) => {
+                    const startCoords = inputCoords[literal];
+                    const endY = yPos + (literals.length === 1 ? termHeight / 2 : (i * (termHeight-10) / (literals.length-1)) + 5);
+                    const endX = literals.length > 1 ? AND_GATE_X : AND_GATE_X + 40;
+                    
+                    circuitSvg.appendChild(createSvgElement('line', { x1: startCoords.x, y1: startCoords.y, x2: endX, y2: endY, class: 'wire'}));
+                    circuitSvg.appendChild(createSvgElement('circle', { cx: startCoords.x, cy: startCoords.y, r: 2.5, fill: '#7f8c8d'}));
+                });
+                
+                andOutputs.push({ y: andY, x: startX });
+                yPos += termHeight + 20;
+            });
+            
+            const orY = andOutputs.length > 0 ? andOutputs.reduce((sum, p) => sum + p.y, 0) / andOutputs.length : 0;
+            if (validTerms.length > 1) {
+                const orHeight = Math.max(40, (andOutputs.length)*20);
+                const orYStart = orY - orHeight/2;
+                circuitSvg.appendChild(createSvgElement('rect', { x: OR_GATE_X, y: orYStart, width: 40, height: orHeight, class: 'gate-rect' }));
+                circuitSvg.appendChild(createSvgElement('text', { x: OR_GATE_X + 20, y: orY, class: 'gate-text', textContent: '≥1'}));
+                
+                andOutputs.forEach(point => {
+                    circuitSvg.appendChild(createSvgElement('line', { x1: point.x, y1: point.y, x2: OR_GATE_X, y2: point.y, class: 'wire' }));
+                });
+                
+                circuitSvg.appendChild(createSvgElement('line', { x1: OR_GATE_X + 40, y1: orY, x2: OUTPUT_X, y2: orY, class: 'wire' }));
+            } else if (andOutputs.length === 1) {
+                 circuitSvg.appendChild(createSvgElement('line', { x1: andOutputs[0].x, y1: orY, x2: OUTPUT_X, y2: orY, class: 'wire' }));
+            }
+            
+            if(andOutputs.length > 0) {
+                 circuitSvg.appendChild(createSvgElement('text', { x: OUTPUT_X + 10, y: orY + 5, class: 'input-text', textContent: 'Y' }));
+            }
+            
+            circuitSvg.setAttribute('height', yPos);
+        }
+        
+        varSelect.addEventListener('change', (e) => {
+            numVars = parseInt(e.target.value);
+            createKMap();
+        });
+
+        simplifyBtn.addEventListener('click', () => {
+            const { terms, groups, minterms } = simplify();
+            resultExpression.innerHTML = `Y = ${terms.join(' + ')}`;
+            drawGroupsUI(groups);
+            generateTruthTable(minterms);
+            drawCircuit(terms);
+        });
+
+        resetBtn.addEventListener('click', createKMap);
+        createKMap();
+    });
+    </script>
+</body>
+</html>
